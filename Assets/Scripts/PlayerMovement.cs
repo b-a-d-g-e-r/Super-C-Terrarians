@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Mono.Cecil;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -17,46 +18,58 @@ public class PlayerMovement : MonoBehaviour {
 
     [Header("Components")]
     public Rigidbody2D rb;
+    public CapsuleCollider2D cc;
     public Animator animator;
     public LayerMask groundLayer;
     public GameObject characterHolder;
-    public InputAction playerControls;
+    public PlayerInputActions playerControls;
+    private InputAction move;
+    private InputAction jump;
+    private InputAction lightAttack;
 
     [Header("Physics")]
     public float maxSpeed = 7f;
-    public float linearDrag = 4f;
+    public float linearDrag = 4f;    
     public float gravity = 1f;
     public float fallMultiplier = 5f;
+    
+    [Header("Colliders")]
+    public Collider kickCollider;
 
-    public void OnEnable()
+    private void Awake()
     {
-        playerControls.Enable();
+        playerControls = new PlayerInputActions();
+        
+    }
+    private void OnEnable()
+    {
+        move = playerControls.Player.Move;
+        move.Enable();
+
+        jump = playerControls.Player.Jump;
+        jump.Enable();
+        jump.performed += Jump;
+        
+        lightAttack = playerControls.Player.LightAttack;
+        lightAttack.Enable();
+        lightAttack.performed += LightAttack;
     }
 
-    public void OnDisable()
+    private void OnDisable()
     {
-        playerControls.Disable();
+        move.Disable();
+        jump.Disable();
+        lightAttack.Disable();
     }
     
     // Update is called once per frame
     void Update()
     {
-        moveDirection = playerControls.ReadValue<Vector2>();
-
-        if (Input.GetButtonDown("Jump"))
-        {
-            jumpTimer = Time.time + jumpDelay;
-        }
-
-        animator.SetBool("onGround", onGround());
+        moveDirection = move.ReadValue<Vector2>();
 
         direction = new Vector2(moveDirection.x, 0);
 
         moveCharacter(direction.x);
-        if (jumpTimer > Time.time && onGround())
-        {
-            Jump();
-        }
 
         modifyPhysics();    
     }
@@ -73,20 +86,27 @@ public class PlayerMovement : MonoBehaviour {
         animator.SetFloat("Horizontal", Mathf.Abs(rb.velocity.x));
         animator.SetFloat("Vertical",rb.velocity.y);
     }
-    void Jump(){
-        rb.velocity = new Vector2(rb.velocity.x, 0);
-        rb.AddForce(Vector2.up * jumpSpeed, ForceMode2D.Impulse);
-        jumpTimer = 0;
+    void Jump(InputAction.CallbackContext context){
+        jumpTimer = Time.time + jumpDelay;
+        if (jumpTimer > Time.time && onGround() == true)
+        {
+            rb.velocity = new Vector2(0, 0);
+            rb.AddForce(Vector2.up * jumpSpeed, ForceMode2D.Impulse);
+            jumpTimer = 0;
+        }
     }
 
     private bool onGround()
     {
-        return transform.Find("GroundCheck").GetComponent<GroundCheck>().onGround;
+        float heightBuffer = 0.05f;
+        RaycastHit2D rayhit = Physics2D.Raycast(cc.bounds.center, Vector2.down, cc.bounds.extents.y + heightBuffer, groundLayer);
+        return rayhit.collider != null;
     }
+    
     void modifyPhysics() {
         bool changingDirections = (direction.x > 0 && rb.velocity.x < 0) || (direction.x < 0 && rb.velocity.x > 0);
-
-        if(onGround()){
+    
+        if(onGround() == true){
             if (Mathf.Abs(direction.x) < 0.4f || changingDirections) {
                 rb.drag = linearDrag;
             } else {
@@ -101,15 +121,33 @@ public class PlayerMovement : MonoBehaviour {
             {
                 rb.gravityScale = gravity * fallMultiplier;
             }
-            else if(rb.velocity.y > 0 && !Input.GetButton("Jump"))
+            else if(rb.velocity.y > 0 && jump.inProgress)
             {
                 rb.gravityScale = gravity * (fallMultiplier / 2);
             }
         }
     }
+    
     void Flip() {
         facingRight = !facingRight;
         transform.rotation = Quaternion.Euler(0, facingRight ? 0 : 180, 0);
+    }
+
+    void LightAttack(InputAction.CallbackContext context)
+    {
+        if (kickCollider != null && kickCollider.enabled && kickCollider.isTrigger)
+            {
+                Collider[] hitColliders = Physics.OverlapBox(kickCollider.bounds.center, kickCollider.bounds.extents, kickCollider.transform.rotation);
+
+                foreach (Collider hitCollider in hitColliders)
+                {
+                    if (hitCollider.CompareTag("Enemy"))
+                    {
+                        Debug.Log("Kick hit enemy!");
+                        // Perform action for successful hit here
+                    }
+                }
+            }
     }
 
 }
