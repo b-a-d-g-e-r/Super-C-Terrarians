@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using Mono.Cecil;
@@ -34,7 +35,8 @@ public class PlayerMovement : MonoBehaviour {
     public float fallMultiplier = 5f;
     
     [Header("Colliders")]
-    public Collider kickCollider;
+    public Collider2D kickCollider;
+    public float hitboxDistanceFromPlayer = 0.1f;
 
     private void Awake()
     {
@@ -69,6 +71,10 @@ public class PlayerMovement : MonoBehaviour {
 
         direction = new Vector2(moveDirection.x, 0);
 
+        float directionAngle = Mathf.Atan2(moveDirection.y, moveDirection.x) * Mathf.Rad2Deg;
+        Vector3 hitboxPosition = transform.position + Quaternion.AngleAxis(directionAngle,Vector3.forward) * new Vector3(hitboxDistanceFromPlayer, 0, 0);
+        kickCollider.transform.position = hitboxPosition;
+        
         moveCharacter(direction.x);
 
         modifyPhysics();    
@@ -135,14 +141,28 @@ public class PlayerMovement : MonoBehaviour {
 
     void LightAttack(InputAction.CallbackContext context)
     {
+        
         if (kickCollider != null && kickCollider.enabled && kickCollider.isTrigger)
             {
-                Collider[] hitColliders = Physics.OverlapBox(kickCollider.bounds.center, kickCollider.bounds.extents, kickCollider.transform.rotation);
+                Collider2D[] hitColliders = Physics2D.OverlapBoxAll(kickCollider.bounds.center, kickCollider.bounds.size, kickCollider.transform.eulerAngles.z);
 
-                foreach (Collider hitCollider in hitColliders)
+                foreach (Collider2D hitCollider in hitColliders)
                 {
                     if (hitCollider.CompareTag("Enemy"))
                     {
+                        Vector2 direction = hitCollider.transform.position - transform.position;
+                        
+                        direction.Normalize();
+
+                        float forceMagnitude = 1000f;
+                        Vector2 force = direction * forceMagnitude;
+
+                        Rigidbody2D enemyRigidBody = hitCollider.GetComponent<Rigidbody2D>();
+                        if (enemyRigidBody != null)
+                        {
+                            enemyRigidBody.AddForce(force);
+                        }
+                        
                         Debug.Log("Kick hit enemy!");
                         // Perform action for successful hit here
                     }
