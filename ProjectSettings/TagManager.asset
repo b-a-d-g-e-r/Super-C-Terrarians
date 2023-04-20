@@ -5,6 +5,8 @@ TagManager:
   serializedVersion: 2
   tags:
   - Enemy
+  - Kill Zone
+  - Attacks
   layers:
   - Default
   - TransparentFX
